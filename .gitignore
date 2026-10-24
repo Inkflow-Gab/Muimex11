@@ -26,6 +26,7 @@ local.properties
 .DS_Store
 *.log
 .icon-preview/
+icon-preview/
 
 # stale build outputs
 app/release/

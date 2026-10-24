@@ -53,7 +53,7 @@ ps = shaped(img, 512, 0.16)
 ps.save(os.path.join(BASE, "app", "src", "main", "ic_launcher-playstore.png"))
 
 # Preview montage for visual verification
-prev = os.path.join(BASE, ".icon-preview")
+prev = os.path.join(BASE, "icon-preview")
 os.makedirs(prev, exist_ok=True)
 shaped(img, 192, 0.22).save(os.path.join(prev, "ic_launcher_192.png"))
 fg432 = Image.new("RGBA", (432, 432), (0, 0, 0, 0))

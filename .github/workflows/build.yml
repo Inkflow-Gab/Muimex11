@@ -39,7 +39,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: icon-preview
-          path: .icon-preview/
+          path: icon-preview/
           if-no-files-found: error
 
       - name: Accept Android SDK licenses
