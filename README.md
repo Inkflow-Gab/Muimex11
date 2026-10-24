@@ -17,6 +17,8 @@ No ads, no accounts, no paid tiers — every feature is available to everyone.
 
 <div align="center">
 
+<img src="https://readme-typing-svg.demolab.com/?font=Righteous&weight=600&size=22&duration=3000&pause=900&color=7CF5C9&center=true&vCenter=true&width=640&height=60&lines=Floating+Game+Space+Dock+%7C+Live+FPS;Samsung+Boost+Panel;Shizuku+Powered+%7C+No+Root" alt="live animation" />
+
 <img src="https://count.getloli.com/get/@Muimex11-official-readme" alt="visitors" width="200" />
 
 </div>

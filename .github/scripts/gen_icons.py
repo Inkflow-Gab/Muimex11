@@ -9,7 +9,7 @@ can be verified visually.
 import os
 from PIL import Image, ImageDraw, ImageOps
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RES = os.path.join(BASE, "app", "src", "main", "res")
 SRC = os.path.join(BASE, "art", "app-icon.jpg")
 DPI = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
