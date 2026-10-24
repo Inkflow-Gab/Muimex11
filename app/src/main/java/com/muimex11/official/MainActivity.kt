@@ -91,6 +91,13 @@ class MainActivity : AppCompatActivity() {
         updateDeviceInfo()
         refreshFreezeStatus()
 
+        // Sync Game Space state — the service may have been closed from its
+        // own floating panel since the last tap here.
+        isGameSpaceEnabled = GameSpaceService.isRunning
+        findViewById<TextView>(R.id.tvStatusGameSpace).text = getString(
+            if (GameSpaceService.isRunning) R.string.status_enabled else R.string.status_disabled
+        )
+
         val apk = pendingApk
         if (apk != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.canRequestPackageInstalls()) {
             pendingApk = null

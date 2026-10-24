@@ -30,6 +30,18 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Generate launcher icons from art/
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 ./.github/scripts/gen_icons.py
+
+      - name: Upload icon preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: icon-preview
+          path: .icon-preview/
+          if-no-files-found: error
+
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 

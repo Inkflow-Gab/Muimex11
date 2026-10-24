@@ -474,6 +474,7 @@
     <!-- Game Space floating menu -->
     <string name="title_gamespace">Game Space Floating Menu</string>
     <string name="gs_app_header">Now playing</string>
+    <string name="gs_panel_brand">GAME SPACE</string>
     <string name="gs_no_app">No app detected</string>
     <string name="gs_fps_measuring">-- FPS</string>
     <string name="gs_gamemode">Game Boost</string>

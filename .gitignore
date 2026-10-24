@@ -25,6 +25,7 @@ local.properties
 # OS junk
 .DS_Store
 *.log
+.icon-preview/
 
 # stale build outputs
 app/release/

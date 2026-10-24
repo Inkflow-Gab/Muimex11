@@ -9,6 +9,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -18,12 +19,14 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.content.res.ColorStateList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,24 +37,36 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /**
- * RedMagic / Game-Space style floating dock.
+ * RedMagic / Game-Space style floating dock — "futuristic glass" edition.
  *
- * Bubble window: draggable, snaps to the nearest edge.
- * Panel window: expands next to the bubble and shows
- *  - the detected foreground app (icon + label) with a live FPS counter
- *  - quick boost rows (also see `items`): RAM boost, Game Boost for the
- *    current app, fixed perf, thermal bypass, FPS lock, focus mode, no
- *    blurs, resolution cycle, HW monitor, stop game.
+ * Bubble window: draggable rune-ring orb, snaps to the nearest edge.
+ * Panel window: expands beside the bubble showing the detected app
+ * (icon + label), a live FPS counter and a 2-column grid of boost tiles:
+ * RAM boost, Game Boost for the foreground app, fixed perf, thermal
+ * override, 120Hz lock, focus mode, no blurs, resolution cycle,
+ * HW monitor, stop game.
+ *
+ * Lifecycle contract:
+ *  - [isRunning] (companion, volatile) is the single source of truth for
+ *    whether the dock is alive. MainActivity reads this live value, so the
+ *    dock can always be re-opened no matter where it was closed from.
+ *  - onDestroy() clears the persisted enabled flag so nothing goes stale.
  *
  * All commands run through Shizuku shell; no root required.
  */
 class GameSpaceService : Service() {
 
+    companion object {
+        /** Live state used by MainActivity so toggling always reflects reality. */
+        @Volatile
+        var isRunning: Boolean = false
+    }
+
     private lateinit var wm: WindowManager
     private var bubbleRoot: View? = null
     private var panelRoot: View? = null
 
-    private lateinit var bubble: LinearLayout
+    private lateinit var bubble: FrameLayout
     private lateinit var panel: LinearLayout
     private lateinit var itemContainer: LinearLayout
     private lateinit var appIconView: ImageView
@@ -67,6 +82,7 @@ class GameSpaceService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val ioScope = CoroutineScope(Dispatchers.IO)
+    private val tiles = ArrayList<View>()
 
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private lateinit var panelParams: WindowManager.LayoutParams
@@ -88,6 +104,7 @@ class GameSpaceService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         try {
             buildBubble()
@@ -118,7 +135,7 @@ class GameSpaceService : Service() {
             overlayType, flags, PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = screenBounds().width() - dp(46)
+            x = screenBounds().width() - dp(66)
             y = screenBounds().height() / 3
         }
 
@@ -135,6 +152,7 @@ class GameSpaceService : Service() {
                     touchX = e.rawX; touchY = e.rawY
                     dragging = false
                     downAt = android.os.SystemClock.uptimeMillis()
+                    bubble.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -149,11 +167,11 @@ class GameSpaceService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    bubble.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
                     if (!dragging && android.os.SystemClock.uptimeMillis() - downAt < 350) {
-                        if (::panel.isInitialized) collapse() else expand()
-                    } else if (!::panel.isInitialized) {
-                        snapToEdge()
+                        if (isExpanded()) collapse() else expand()
                     }
+                    snapToEdge()
                     true
                 }
                 else -> false
@@ -174,7 +192,8 @@ class GameSpaceService : Service() {
         itemContainer = panelRoot!!.findViewById(R.id.gsItemContainer)
         fpsChip.text = getString(R.string.gs_fps_measuring)
 
-        items.forEach { itemContainer.addView(buildRow(it)) }
+        tiles.clear()
+        buildTiles()
 
         panelRoot!!.findViewById<ImageView>(R.id.gsBtnMinimize).setOnClickListener { collapse() }
         panelRoot!!.findViewById<ImageView>(R.id.gsBtnKill).setOnClickListener {
@@ -212,9 +231,15 @@ class GameSpaceService : Service() {
         try {
             wm.addView(panelRoot, panelParams)
             panel.alpha = 0f
+            panel.scaleX = 0.86f
+            panel.scaleY = 0.86f
             panelRoot!!.post {
                 placePanel()
-                panel.animate().alpha(1f).setDuration(130).start()
+                panel.animate()
+                    .alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(180)
+                    .setInterpolator(OvershootInterpolator(1.12f))
+                    .start()
                 capScrollHeight()
             }
             startFpsPolling()
@@ -234,18 +259,18 @@ class GameSpaceService : Service() {
         val scr = screenBounds()
         val left = bubbleParams.x < scr.width() / 2
         panelParams.x = if (left)
-            max(0, bubbleParams.x + bubble.width + dp(6))
+            max(0, bubbleParams.x + bubble.width + dp(8))
         else
-            max(0, bubbleParams.x - panel.width - dp(6))
+            max(0, bubbleParams.x - panel.width - dp(8))
         val top = bubbleParams.y + bubble.height / 2 - panel.height / 2
-        panelParams.y = top.coerceIn(dp(8), max(dp(8), scr.height() - panel.height - dp(10)))
+        panelParams.y = top.coerceIn(dp(10), max(dp(10), scr.height() - panel.height - dp(10)))
         update(panelRoot, panelParams)
     }
 
     private fun capScrollHeight() {
         val scr = screenBounds()
         itemContainer.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        val cap = (scr.height() * 0.42f).toInt()
+        val cap = (scr.height() * 0.46f).toInt()
         if (itemContainer.measuredHeight > cap && scroll.layoutParams.height != cap) {
             scroll.layoutParams = scroll.layoutParams.apply { height = cap }
         }
@@ -365,82 +390,152 @@ class GameSpaceService : Service() {
     // When we force Performance mode onto the current app we remember it here.
     private var gameBoostPkg: String? = null
 
-    // ---------------------------------------------------------------- row UI
+    // ------------------------------------------------------------- tile UI
 
-    private val STATUS_ON = Color.parseColor("#7DE28E")
-    private val STATUS_OFF = Color.parseColor("#9AA3B2")
+    private val COLOR_ON = Color.parseColor("#00E68C")
+    private val COLOR_OFF = Color.parseColor("#9AA3B2")
+    private val COLOR_ACCENT = Color.parseColor("#C9B6FF")
     private val STATUS_TAG = "gs_status_tag"
+    private val DOT_TAG = "gs_dot_tag"
 
-    private fun buildRow(spec: ItemSpec): View {
+    /** 2-column grid: pairs of [items] become rows of tiles. */
+    private fun buildTiles() {
+        var i = 0
+        while (i < items.size) {
+            val rowLayout = LinearLayout(uiContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    if (i > 0) topMargin = dp(8)
+                }
+            }
+            rowLayout.addView(tileColumn(buildTile(items[i])))
+            if (i + 1 < items.size) {
+                rowLayout.addView(tileColumn(buildTile(items[i + 1])))
+            } else {
+                rowLayout.addView(placeholderColumn())
+            }
+            itemContainer.addView(rowLayout)
+            i += 2
+        }
+    }
+
+    private fun tileColumn(tile: View): LinearLayout = LinearLayout(uiContext()).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        addView(tile, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+    }
+
+    private fun placeholderColumn(): View = View(uiContext()).apply {
+        layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
+        isClickable = false
+        alpha = 0f
+    }
+
+    private fun tileBg(active: Boolean): GradientDrawable = GradientDrawable().apply {
+        cornerRadius = dp(15).toFloat()
+        if (active) {
+            setColor(Color.parseColor("#332BD07E"))
+            setStroke(dp(1), Color.parseColor("#8C27BE71"))
+        } else {
+            setColor(Color.parseColor("#21FFFFFF"))
+            setStroke(dp(1), Color.parseColor("#2EFFFFFF"))
+        }
+    }
+
+    private fun buildTile(spec: ItemSpec): View {
         val ctx = uiContext()
-        val row = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(13).toFloat()
-                setColor(0x2EFFFFFF)
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(7) }
+        val tile = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(11), dp(12), dp(11))
+            background = tileBg(false)
+            // Ripple feedback on top of the glass card
+            foreground = RippleDrawable(
+                ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+                null,
+                tileBg(false)
+            )
         }
 
-        val iconBox = FrameLayout(ctx).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0x2BFFFFFF)
-            }
-        }
+        val iconBox = FrameLayout(ctx)
         iconBox.addView(ImageView(ctx).apply {
             setImageResource(spec.iconRes)
-            imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#BD9BFB"))
-            layoutParams = FrameLayout.LayoutParams(dp(17), dp(17), Gravity.CENTER)
+            imageTintList = ColorStateList.valueOf(COLOR_ACCENT)
+            layoutParams = FrameLayout.LayoutParams(dp(25), dp(25))
         })
-        row.addView(iconBox, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(11) })
+        tile.addView(iconBox)
 
-        val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(TextView(ctx).apply {
+        tile.addView(TextView(ctx).apply {
             text = getString(spec.titleRes)
-            textSize = 13.5f
+            textSize = 11.5f
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            maxLines = 1
+            setTextColor(Color.parseColor("#F4F4F6"))
+            maxLines = 2
+            setPadding(0, dp(7), 0, 0)
         })
-        val status = TextView(ctx).apply {
+
+        // status dot + label
+        val statusRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(5), 0, 0)
+        }
+        statusRow.addView(View(ctx).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(COLOR_OFF)
+            }
+            tag = DOT_TAG
+            layoutParams = LinearLayout.LayoutParams(dp(6), dp(6)).apply { marginEnd = dp(5) }
+        })
+        statusRow.addView(TextView(ctx).apply {
             text = getString(R.string.gs_off)
-            textSize = 10.5f
-            setTextColor(STATUS_OFF)
-            setPadding(0, dp(1), 0, 0)
+            textSize = 9.5f
+            setTextColor(COLOR_OFF)
             tag = STATUS_TAG
-        }
-        col.addView(status)
-        row.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        })
+        tile.addView(statusRow)
 
-        row.setOnClickListener { applyItem(spec, row) }
-        row.tag = spec
-        return row
+        tile.setOnClickListener { applyItem(spec, tile) }
+        tile.tag = spec
+        tiles.add(tile)
+        return tile
     }
 
-    private fun statusViewOf(row: View): TextView? {
-        val col = (row as? android.view.ViewGroup)?.getChildAt(1) as? android.view.ViewGroup ?: return null
-        for (i in 0 until col.childCount) {
-            val v = col.getChildAt(i)
-            if (v is TextView && v.tag == STATUS_TAG) return v
-        }
-        return null
-    }
+    private fun statusViewOf(tile: View): TextView? =
+        tile.findViewWithTag(STATUS_TAG) as? TextView
 
-    private fun setRow(row: View, active: Boolean) {
-        val tv = statusViewOf(row) ?: return
+    private fun dotViewOf(tile: View): View? =
+        tile.findViewWithTag(DOT_TAG) as? View
+
+    private fun setRow(tile: View, active: Boolean) {
+        val tv = statusViewOf(tile) ?: return
         tv.text = getString(if (active) R.string.gs_on else R.string.gs_off)
-        tv.setTextColor(if (active) STATUS_ON else STATUS_OFF)
+        tv.setTextColor(if (active) COLOR_ON else COLOR_OFF)
+        dotViewOf(tile)?.let { dot ->
+            (dot.background as? GradientDrawable)?.setColor(if (active) COLOR_ON else COLOR_OFF)
+        }
+        val icon = (tile as? android.view.ViewGroup)?.getChildAt(0) as? android.view.ViewGroup
+        icon?.getChildAt(0)?.let { v ->
+            (v as? ImageView)?.imageTintList =
+                ColorStateList.valueOf(if (active) COLOR_ON else COLOR_ACCENT)
+        }
+        tile.background = tileBg(active)
+        tile.foreground = RippleDrawable(
+            ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+            tileBg(active),
+            tileBg(active)
+        )
     }
 
-    private fun setApplying(row: View) {
-        val tv = statusViewOf(row) ?: return
+    private fun setApplying(tile: View) {
+        val tv = statusViewOf(tile) ?: return
         tv.text = getString(R.string.gs_applying)
-        tv.setTextColor(STATUS_OFF)
+        tv.setTextColor(COLOR_OFF)
     }
 
     // ------------------------------------------------------------ item logic
@@ -457,8 +552,8 @@ class GameSpaceService : Service() {
         else -> false
     }
 
-    private fun applyItem(spec: ItemSpec, row: View) {
-        setApplying(row)
+    private fun applyItem(spec: ItemSpec, tile: View) {
+        setApplying(tile)
         scope.launch {
             var ok = false
             try {
@@ -523,21 +618,21 @@ class GameSpaceService : Service() {
                 when (spec.kind) {
                     Kind.ONE_SHOT, Kind.RES_CYCLE, Kind.STOP_GAME, Kind.FG_GAME_MODE -> {
                         toast(getString(spec.successToastRes ?: R.string.gs_boost))
-                        setRow(row, rowState(spec))
+                        setRow(tile, rowState(spec))
                     }
                     else -> {
                         if (!ok) toast(getString(R.string.gs_failed, "exit code"))
-                        setRow(row, rowState(spec))
+                        setRow(tile, rowState(spec))
                     }
                 }
                 if (spec.kind == Kind.TOGGLE_STATE || spec.kind == Kind.MONITOR) {
-                    refreshRowAsync(spec, row)
+                    refreshRowAsync(spec, tile)
                 }
             }
         }
     }
 
-    private fun refreshRowAsync(spec: ItemSpec, row: View) {
+    private fun refreshRowAsync(spec: ItemSpec, tile: View) {
         ioScope.launch {
             val state = try {
                 when (spec.kind) {
@@ -546,17 +641,16 @@ class GameSpaceService : Service() {
                     else -> rowState(spec)
                 }
             } catch (_: Exception) { false }
-            withContext(Dispatchers.Main) { setRow(row, state) }
+            withContext(Dispatchers.Main) { setRow(tile, state) }
         }
     }
 
     private fun refreshStates() {
-        for (i in 0 until itemContainer.childCount) {
-            val row = itemContainer.getChildAt(i)
-            val spec = row.tag as? ItemSpec ?: continue
+        tiles.forEach { tile ->
+            val spec = tile.tag as? ItemSpec ?: return@forEach
             when (spec.kind) {
-                Kind.TOGGLE_SESSION, Kind.FG_GAME_MODE -> setRow(row, rowState(spec))
-                Kind.TOGGLE_STATE, Kind.MONITOR -> refreshRowAsync(spec, row)
+                Kind.TOGGLE_SESSION, Kind.FG_GAME_MODE -> setRow(tile, rowState(spec))
+                Kind.TOGGLE_STATE, Kind.MONITOR -> refreshRowAsync(spec, tile)
                 else -> {}
             }
         }
@@ -604,10 +698,11 @@ class GameSpaceService : Service() {
                 if (pkg != null) {
                     appNameView.text = label
                     appIconView.setImageDrawable(icon)
+                    appIconView.imageTintList = null
                 } else {
                     appNameView.text = getString(R.string.gs_menu_title)
-                    appIconView.setImageResource(R.drawable.ic_gamespace)
-                    appIconView.imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#BD9BFB"))
+                    appIconView.setImageResource(R.drawable.gamespace_ring)
+                    appIconView.imageTintList = null
                 }
                 // If Game Boost was left on for an app that changed, reset it.
                 gameBoostPkg?.takeIf { it != pkg && it.isNotEmpty() }?.let { old ->
@@ -644,9 +739,9 @@ class GameSpaceService : Service() {
                                     fpsChip.text = "$shown FPS"
                                     fpsChip.setTextColor(
                                         when {
-                                            shown >= 50 -> STATUS_ON
-                                            shown >= 30 -> Color.parseColor("#E0A800")
-                                            else -> Color.parseColor("#FF6B6B")
+                                            shown >= 50 -> COLOR_ON
+                                            shown >= 30 -> Color.parseColor("#FFB300")
+                                            else -> Color.parseColor("#FF5A6E")
                                         }
                                     )
                                 }
@@ -742,6 +837,11 @@ class GameSpaceService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
+        try {
+            getSharedPreferences(Prefs.MAIN, Context.MODE_PRIVATE)
+                .edit().putBoolean(Prefs.KEY_GAMESPACE_ENABLED, false).apply()
+        } catch (_: Exception) {}
         stopFpsPolling()
         try {
             bubbleRoot?.let { wm.removeView(it) }
@@ -751,6 +851,6 @@ class GameSpaceService : Service() {
         } catch (_: Exception) {}
         bubbleRoot = null
         panelRoot = null
+        tiles.clear()
     }
 }
-

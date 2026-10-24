@@ -11,6 +11,11 @@ import es.dmoral.toasty.Toasty
 /**
  * MainActivity side of the Game Space floating dock: overlay-permission gate,
  * start/stop of [GameSpaceService] and status text.
+ *
+ * The live [GameSpaceService.isRunning] flag is the source of truth, so the
+ * dock can always be re-opened — even after it was closed from its own
+ * floating panel (X button), which used to leave a stale "enabled" state and
+ * made the first tap look dead.
  */
 internal fun MainActivity.toggleGameSpace() {
     if (!Settings.canDrawOverlays(this)) {
@@ -22,18 +27,27 @@ internal fun MainActivity.toggleGameSpace() {
 
     val prefs = getSharedPreferences(Prefs.MAIN, Context.MODE_PRIVATE)
     val intent = Intent(this, GameSpaceService::class.java)
+    val enable = !GameSpaceService.isRunning
 
-    if (isGameSpaceEnabled) {
-        stopService(intent)
-        isGameSpaceEnabled = false
-        prefs.edit().putBoolean(Prefs.KEY_GAMESPACE_ENABLED, false).apply()
-        findViewById<TextView>(R.id.tvStatusGameSpace).text = getString(R.string.status_disabled)
-        Toasty.success(this, getString(R.string.toast_gamespace_off), Toast.LENGTH_SHORT, true).show()
+    if (enable) {
+        try {
+            startService(intent)
+        } catch (e: Exception) {
+            Toasty.error(this, getString(R.string.svc_failed, e.message ?: ""), Toast.LENGTH_LONG, true).show()
+            return
+        }
     } else {
-        startService(intent)
-        isGameSpaceEnabled = true
-        prefs.edit().putBoolean(Prefs.KEY_GAMESPACE_ENABLED, true).apply()
-        findViewById<TextView>(R.id.tvStatusGameSpace).text = getString(R.string.status_enabled)
-        Toasty.success(this, getString(R.string.toast_gamespace_on), Toast.LENGTH_SHORT, true).show()
+        stopService(intent)
     }
+
+    isGameSpaceEnabled = enable
+    prefs.edit().putBoolean(Prefs.KEY_GAMESPACE_ENABLED, enable).apply()
+    findViewById<TextView>(R.id.tvStatusGameSpace).text =
+        getString(if (enable) R.string.status_enabled else R.string.status_disabled)
+    Toasty.success(
+        this,
+        getString(if (enable) R.string.toast_gamespace_on else R.string.toast_gamespace_off),
+        Toast.LENGTH_SHORT,
+        true
+    ).show()
 }

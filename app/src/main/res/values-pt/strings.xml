@@ -462,6 +462,7 @@
 
     <!-- Game Space — menu flutuante -->
     <string name="gs_app_header">Jogando agora</string>
+    <string name="gs_panel_brand">GAME SPACE</string>
     <string name="gs_no_app">Nenhum app detectado</string>
     <string name="gs_fps_measuring">-- FPS</string>
     <string name="gs_gamemode">Game Boost</string>
