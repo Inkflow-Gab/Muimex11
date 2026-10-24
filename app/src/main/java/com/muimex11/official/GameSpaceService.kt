@@ -98,17 +98,13 @@ class GameSpaceService : Service() {
     }
 
     /** Always-dark context so the dock looks identical over bright games. */
-    private fun uiContext(): Context = AppTranslator.wrap(
-        android.view.ContextThemeWrapper(
-            run {
-                val config = android.content.res.Configuration(resources.configuration)
-                config.uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES or
-                    (config.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv())
-                createConfigurationContext(config)
-            },
-            R.style.Theme_Muimex11
-        )
-    )
+    private fun uiContext(): Context {
+        val config = android.content.res.Configuration(resources.configuration)
+        config.uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES or
+            (config.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv())
+        val localizedContext = createConfigurationContext(config)
+        return android.view.ContextThemeWrapper(localizedContext, R.style.Theme_Muimex11)
+    }
 
     @SuppressLint("ClickableViewAccessibility", "InflateParams")
     private fun buildBubble() {

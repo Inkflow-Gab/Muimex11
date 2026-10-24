@@ -1,5 +1,6 @@
 package com.muimex11.official
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -19,7 +20,7 @@ internal fun MainActivity.toggleGameSpace() {
         return
     }
 
-    val prefs = getSharedPreferences(Prefs.MAIN, MODE_PRIVATE)
+    val prefs = getSharedPreferences(Prefs.MAIN, Context.MODE_PRIVATE)
     val intent = Intent(this, GameSpaceService::class.java)
 
     if (isGameSpaceEnabled) {

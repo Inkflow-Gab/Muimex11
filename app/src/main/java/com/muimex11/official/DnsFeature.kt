@@ -26,13 +26,13 @@ internal fun MainActivity.showDnsDialog() {
         list.addView(optionRow(this, p.name, "${p.desc}  ·  ${p.host}", selected = current.contains(p.host)) {
             sheet.dismiss()
             val cmd = "settings put global private_dns_mode hostname && settings put global private_dns_specifier ${p.host}"
-            runAdbCommand(cmd, getString(R.string.toast_dns_set, p.name), showAd = true) { fetchSystemStatuses() }
+            runAdbCommand(cmd, getString(R.string.toast_dns_set, p.name)) { fetchSystemStatuses() }
         })
     }
     list.addView(optionRow(this, getString(R.string.w_default), getString(R.string.dns_off_desc), selected = current.contains(AppTranslator.english(this, R.string.w_default))) {
         sheet.dismiss()
         val cmd = "settings put global private_dns_mode default && settings delete global private_dns_specifier"
-        runAdbCommand(cmd, getString(R.string.msg_dns_default), showAd = false) { fetchSystemStatuses() }
+        runAdbCommand(cmd, getString(R.string.msg_dns_default)) { fetchSystemStatuses() }
     })
 
     sheet.content(list).button(getString(R.string.btn_cancel), SheetStyle.TEXT).show()

@@ -154,11 +154,12 @@ private fun MainActivity.samsungMaxBoostRow(): MaterialCardView {
 }
 
 private fun MainActivity.samsungRow(action: SamsungAction): SamsungRow {
-    val row = LinearLayout(this).apply {
+    val act = this
+    val row = LinearLayout(act).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(12), dp(10), dp(12), dp(10))
-        background = Ui.ripple(this@showSamsungBoostSheet, Ui.tonalFill(this@showSamsungBoostSheet), dp(14))
+        background = Ui.ripple(act, Ui.tonalFill(act), dp(14))
         isClickable = true
         isFocusable = true
         layoutParams = LinearLayout.LayoutParams(
@@ -170,11 +171,11 @@ private fun MainActivity.samsungRow(action: SamsungAction): SamsungRow {
         text = getString(action.title())
         textSize = 15f
         setTypeface(typeface, android.graphics.Typeface.BOLD)
-        setTextColor(Ui.onSurface(this@showSamsungBoostSheet))
+        setTextColor(Ui.onSurface(act))
     })
     val sub = TextView(this).apply {
         textSize = 12f
-        setTextColor(Ui.onSurfaceVariant(this@showSamsungBoostSheet))
+        setTextColor(Ui.onSurfaceVariant(act))
         setPadding(0, dp(2), 0, 0)
         maxLines = 2
         ellipsize = TextUtils.TruncateAt.END
@@ -184,7 +185,7 @@ private fun MainActivity.samsungRow(action: SamsungAction): SamsungRow {
     row.addView(TextView(this).apply {
         text = "›"
         textSize = 20f
-        setTextColor(Ui.onSurfaceVariant(this@showSamsungBoostSheet))
+        setTextColor(Ui.onSurfaceVariant(act))
     })
     return SamsungRow(row, sub)
 }
@@ -194,13 +195,13 @@ private fun MainActivity.samsungRow(action: SamsungAction): SamsungRow {
 private fun MainActivity.userId0(): Int = android.os.Process.myUid() / 100000
 
 private fun MainActivity.gosRemoved(): Boolean =
-    runShell("pm list packages --user ${userId0()} ${SamsungPkgs.GOS}").trim().isEmpty()
+    runShell("pm list packages --user ${userId0()} ${SamsungPkgs.GOS}").out.trim().isEmpty()
 
 private fun MainActivity.isFrozen(pkg: String): Boolean =
-    runShell("pm list packages -d --user ${userId0()} $pkg").trim().isNotEmpty()
+    runShell("pm list packages -d --user ${userId0()} $pkg").out.trim().isNotEmpty()
 
 private fun MainActivity.ramPlusOff(): Boolean =
-    runShell("settings get global ram_expand_size_list").trim() == "0"
+    runShell("settings get global ram_expand_size_list").out.trim() == "0"
 
 private fun MainActivity.isInstalled(pkg: String): Boolean = try {
     packageManager.getPackageInfo(pkg, 0)
@@ -219,6 +220,7 @@ private fun MainActivity.samsungActionState(action: SamsungAction): Boolean = wh
 }
 
 private fun MainActivity.refreshSamsungStates(rows: Map<SamsungAction, SamsungRow>) {
+    val act = this
     lifecycleScope.launch(Dispatchers.IO) {
         val states = SamsungAction.values().associateWith { samsungActionState(it) }
         withContext(Dispatchers.Main) {
@@ -228,7 +230,7 @@ private fun MainActivity.refreshSamsungStates(rows: Map<SamsungAction, SamsungRo
                     R.string.samsung_state_label,
                     getString(if (on) R.string.samsung_row_on else R.string.samsung_row_off)
                 )
-                row.subtitle.setTextColor(if (on) 0xFF2E9E5B.toInt() else Ui.onSurfaceVariant(this@showSamsungBoostSheet))
+                row.subtitle.setTextColor(if (on) 0xFF2E9E5B.toInt() else Ui.onSurfaceVariant(act))
             }
             val activeCount = states.values.count { it }
             findViewById<TextView>(R.id.tvStatusSamsungBoost).text =
@@ -332,7 +334,7 @@ internal fun MainActivity.restoreAllSamsung(onDone: (() -> Unit)? = null) {
             add("settings delete global ram_expand_size_list")
         }.joinToString(" ; ")
         runSamsung(restore) { _ ->
-            withContext(Dispatchers.Main) {
+            lifecycleScope.launch(Dispatchers.Main) {
                 Toasty.success(this@restoreAllSamsung, getString(R.string.samsung_all_restored), Toast.LENGTH_SHORT, true).show()
                 onDone?.invoke()
             }

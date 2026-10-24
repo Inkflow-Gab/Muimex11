@@ -141,7 +141,7 @@ internal fun MainActivity.boostApps(pkgs: List<String>) {
 
     val before = availRamMb()
     val cmd = valid.joinToString("; ") { "am force-stop $it" }
-    runAdbCommand(cmd, resources.getQuantityString(R.plurals.stopped_apps, valid.size, valid.size), showAd = true) {
+    runAdbCommand(cmd, resources.getQuantityString(R.plurals.stopped_apps, valid.size, valid.size)) {
         lifecycleScope.launch {
             delay(1500)
             val freed = (availRamMb() - before).coerceAtLeast(0)

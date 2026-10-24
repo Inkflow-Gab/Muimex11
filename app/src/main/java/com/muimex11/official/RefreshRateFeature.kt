@@ -43,7 +43,7 @@ internal fun MainActivity.showRefreshRateDialog() {
                 else -> {
                     sheet.dismiss()
                     val cmd = "settings put system min_refresh_rate $min && settings put system peak_refresh_rate $max"
-                    runAdbCommand(cmd, getString(R.string.toast_hz_set, min, max), showAd = true) { fetchSystemStatuses() }
+                    runAdbCommand(cmd, getString(R.string.toast_hz_set, min, max)) { fetchSystemStatuses() }
                 }
             }
         }

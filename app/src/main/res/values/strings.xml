@@ -469,6 +469,7 @@
     <string name="apk_fail_unknown">The system couldn\'t install this bundle.</string>
     <string name="apk_obb_copy">Copying game data… %1$d%%</string>
     <string name="apk_obb_ok">Installed. Game data copied.</string>
+    <string name="apk_obb_fail">Installed, but copying the game data (OBB) failed.</string>
     <string name="apk_obb_skipped">Installed, but game data (OBB) was not copied. Start Shizuku, then pick the bundle again to copy it.</string>
     <!-- Game Space floating menu -->
     <string name="title_gamespace">Game Space Floating Menu</string>
