@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/gsBubble"
+    android:layout_width="46dp"
+    android:layout_height="46dp"
+    android:background="@drawable/bg_gamespace_bubble"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <ImageView
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:contentDescription="@string/btn_gamespace"
+        android:src="@drawable/ic_gamespace"
+        android:tint="#BD9BFB" />
+</LinearLayout>
