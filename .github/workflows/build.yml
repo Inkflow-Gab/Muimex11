@@ -81,9 +81,7 @@ jobs:
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           FP=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk \
-              | grep -m1 'SHA-256 fingerprint:' \
-              | sed -E 's/.*fingerprint: *//' \
-              | tr -d ' :' | tr 'A-F' 'a-f')
+              | grep -oE '[0-9a-f]{64}' | head -1)
           test "${#FP}" = 64 || { echo "::error::Fingerprint extraction failed"; exit 1; }
           echo "sha256=$FP" >> "$GITHUB_OUTPUT"
 
