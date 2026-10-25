@@ -750,7 +750,7 @@ class GameSpaceService : Service() {
                         if (total != null) {
                             val dt = now - lastAt
                             val frames = total - lastCount
-                            val sane = lastCount >= 0 && dt >= 700 && frames in 1..1500
+                            val sane = lastCount >= 0 && dt >= 700 && frames in 1L..1500L
                             if (sane) {
                                 publishFps(((frames * 1000f) / dt).coerceIn(0f, 360f).toInt())
                             }

@@ -93,7 +93,8 @@ internal class InkSplashView(context: Context) : View(context) {
         }
         addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
-                revealApp()
+                // natural completion reveals; a tap-skip hands control to fadeOut()
+                if (!skipping) revealApp()
             }
         })
     }
@@ -128,7 +129,7 @@ internal class InkSplashView(context: Context) : View(context) {
         cx = lineEndX
         cy = lineEndY + radius
         gradientInk.shader = LinearGradient(
-            0f, 0f, w, h,
+            0f, 0f, this.w, this.h,
             intArrayOf(VIOLET, BLUE, CYAN), null, Shader.TileMode.CLAMP
         )
         textPaint.textSize = min(w, h) * 0.085f
@@ -139,7 +140,7 @@ internal class InkSplashView(context: Context) : View(context) {
     @SuppressLint("CanvasSize")
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val t = if (skipping) TOTAL else min(TOTAL, SystemClock.uptimeMillis() - startedAt)
+        val t = if (skipping) TOTAL else min(TOTAL, (SystemClock.uptimeMillis() - startedAt).toFloat())
 
         if (t <= DUR_LINE) {
             drawLine(canvas, t)
@@ -148,12 +149,14 @@ internal class InkSplashView(context: Context) : View(context) {
         }
         if (t > DUR_LINE) drawCircle(canvas, min(DUR_CURL, t - DUR_LINE))
         if (t > DUR_LINE + DUR_CURL) drawLogoReveal(canvas, min(DUR_LOGO, t - DUR_LINE - DUR_CURL))
-        if (t > DUR_LINE + DUR_CURL + DUR_LOGO - 160f) {
-            // gentle global fade at the very end
-            val fadeSpan = 160f + DUR_FADE
-            val over = t - (DUR_LINE + DUR_CURL + DUR_LOGO - 160f)
-            if (over > 0 && fadeSpan > 0) alpha = (1f - (over / fadeSpan)).coerceIn(0f, 1f)
-        } else alpha = 1f
+        if (!skipping) {
+            // gentle global fade at the very end (tap-skip fades via animate() instead)
+            if (t > DUR_LINE + DUR_CURL + DUR_LOGO - 160f) {
+                val fadeSpan = 160f + DUR_FADE
+                val over = t - (DUR_LINE + DUR_CURL + DUR_LOGO - 160f)
+                if (over > 0 && fadeSpan > 0) alpha = (1f - (over / fadeSpan)).coerceIn(0f, 1f)
+            } else alpha = 1f
+        }
         if (t >= TOTAL) revealApp()
     }
 
@@ -226,8 +229,6 @@ internal class InkSplashView(context: Context) : View(context) {
     }
 
     private fun drawLogoReveal(canvas: Canvas, t: Float) {
-        val p = (t / DUR_LOGO).coerceIn(0f, 1f)
-
         // fluid fill creeping from the middle of the ring
         val fillP = ((t - 140f) / DUR_LOGO).coerceIn(0f, 1f)
         if (fillP > 0f) {
@@ -309,5 +310,10 @@ internal class InkSplashView(context: Context) : View(context) {
     }
 }
 
-private fun easeInOutCubic(t: Float): Float =
-    if (t < 0.5f) 4f * t * t * t else 1f - (kotlin.math.pow(-2f * t + 2f, 3f) / 2f)
+private fun easeInOutCubic(t: Float): Float {
+    // 3t^3-2... classic smoothstep-style cubic ease: 4t^3 in first half,
+    // mirrored rise fall on the second — no stdlib pow needed.
+    if (t < 0.5f) return 4f * t * t * t
+    val q = -2f * t + 2f
+    return 1f - (q * q * q / 2f)
+}
