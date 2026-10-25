@@ -13,6 +13,7 @@ import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -56,12 +57,10 @@ internal class InkSplashView(context: Context) : View(context) {
     private var cy = 0f
     private var radius = 0f
 
-    private var lineEndX = 0f
-    private var lineEndY = 0f
-
     private val inkPath = Path()
     private val pathMeasure = PathMeasure()
     private val segPath = Path()
+    private val arcRect = RectF()
     private val measurePos = FloatArray(2)
     private val measureTan = FloatArray(2)
 
@@ -123,17 +122,24 @@ internal class InkSplashView(context: Context) : View(context) {
         super.onSizeChanged(w, h, oldw, oldh)
         this.w = w.toFloat()
         this.h = h.toFloat()
-        radius = min(w, h) * 0.30f
-        lineEndY = h * 0.42f
-        lineEndX = w * 0.34f
-        cx = lineEndX
-        cy = lineEndY + radius
+        val short = min(w, h).toFloat()
+
+        // Dead-center composition: ring + wordmark + tagline treated as one block.
+        radius = short * 0.26f
+        cx = w / 2f
+        val ts = short * 0.075f
+        val ts2 = short * 0.030f
+        val bottomPad = ts * 1.1f + ts2 * 2.75f   // wordmark + tagline space below the ring
+        cy = h / 2f - bottomPad / 2f
+
         gradientInk.shader = LinearGradient(
             0f, 0f, this.w, this.h,
             intArrayOf(VIOLET, BLUE, CYAN), null, Shader.TileMode.CLAMP
         )
-        textPaint.textSize = min(w, h) * 0.085f
-        tagPaint.textSize = min(w, h) * 0.032f
+        textPaint.textSize = ts
+        textPaint.setShadowLayer(ts2 * 0.9f, 0f, 0f, Color.parseColor("#557C4DFF"))
+        tagPaint.textSize = ts2
+        tagPaint.color = Color.parseColor("#93A2BC")
     }
 
     /** View alpha handled globally at the end via setFade(). */
@@ -167,12 +173,14 @@ internal class InkSplashView(context: Context) : View(context) {
         return easeInOutCubic(p)
     }
 
-    /** Ink head position for the entry line (right edge -> past center). */
+    /** Ink head position: glides in from the right edge, lands on the ring's top point. */
     private fun lineHead(t: Float): FloatArray {
-        val start = w + dp(30)
-        val end = lineEndX
-        val x = start + (end - start) * lineProgress(t)
-        val y = lineEndY + sin((x / w) * 2.6f).toFloat() * dp(6)
+        val p = lineProgress(t)
+        val startX = w + dp(36)
+        val x = startX + (cx - startX) * p
+        // rides slightly above mid-screen, rising to the ring's top point;
+        // the wave decays to zero so contact is seamless
+        val y = cy - radius * p + sin(x * 0.010f) * dpF(7f) * (1f - p)
         return floatArrayOf(x, y)
     }
 
@@ -201,7 +209,10 @@ internal class InkSplashView(context: Context) : View(context) {
     private fun drawCircle(canvas: Canvas, t: Float) {
         inkPath.reset()
         inkPath.rewind()
-        inkPath.addCircle(cx, cy, radius, Path.Direction.CW)
+        // 270° (clockwise system) = the ring's top point; a full +360 sweep wraps
+        // from right side down around and back to the top — same point the ink lands on
+        arcRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
+        inkPath.addArc(arcRect, 270f, 360f)
         pathMeasure.setPath(inkPath, false)
         val len = pathMeasure.length
         val shown = len * revealProgress(t)
@@ -251,19 +262,21 @@ internal class InkSplashView(context: Context) : View(context) {
             }
         }
 
-        // wordmark: tracking tightens while fading in
+        // wordmark: rises while fading in, tracking settles, soft violet glow
         val start = 260f
         val tp = ((t - start) / (DUR_LOGO - start)).coerceIn(0f, 1f)
         if (tp > 0f) {
             val eased = OvershootCompat.getInterpolation(tp)
             textPaint.alpha = (255 * eased).toInt()
-            textPaint.letterSpacing = -(eased * 0.06f) // drift from loose to normal-ish
-            val ty = cy + radius + textPaint.textSize * 1.35f
-            canvas.drawText("Muimex11", cx, ty, textPaint)
+            textPaint.letterSpacing = -(eased * 0.055f)
+            val ty = cy + radius + textPaint.textSize * 1.1f
+            val rise = (1f - eased).coerceAtLeast(0f) * textPaint.textSize * 0.45f
+            canvas.drawText("Muimex11", cx, ty - rise, textPaint)
 
-            tagPaint.alpha = (190 * ((tp - 0.35f) / 0.65f).coerceIn(0f, 1f)).toInt()
+            val tagA = ((tp - 0.35f) / 0.65f).coerceIn(0f, 1f)
+            tagPaint.alpha = (200 * tagA).toInt()
             tagPaint.letterSpacing = 0.28f
-            canvas.drawText("GAME OPTIMIZER · SHIZUKU", cx, ty + tagPaint.textSize * 2.1f, tagPaint)
+            canvas.drawText("GAME OPTIMIZER · SHIZUKU", cx, ty + tagPaint.textSize * 2.4f - rise * 0.6f, tagPaint)
         }
     }
 
