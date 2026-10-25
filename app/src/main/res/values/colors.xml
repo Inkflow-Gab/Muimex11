@@ -23,4 +23,13 @@
     <color name="gradientCenter">#1565C0</color>
     <color name="outlineGold">#E0A800</color>
     <color name="outlineGreen">#2E9E5B</color>
+
+    <!-- Brand palette -->
+    <color name="brandViolet">#7C4DFF</color>
+    <color name="brandBlue">#2563EB</color>
+    <color name="brandCyan">#22D3EE</color>
+    <color name="splashBg">#FF07050E</color>
+    <color name="brandGreenStart">#2E9E5B</color>
+    <color name="brandGreenEnd">#15A349</color>
+    <color name="brandDanger">#E53935</color>
 </resources>

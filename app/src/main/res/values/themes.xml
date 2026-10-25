@@ -7,4 +7,12 @@
     </style>
 
     <style name="Theme.Muimex11" parent="Base.Theme.Muimex11" />
+
+    <!-- Ink splash: seamless dark so the cold-start flash matches the animation -->
+    <style name="Theme.Muimex11.Splash">
+        <item name="android:windowBackground">@color/splashBg</item>
+        <item name="android:statusBarColor">@color/splashBg</item>
+        <item name="android:navigationBarColor">@color/splashBg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

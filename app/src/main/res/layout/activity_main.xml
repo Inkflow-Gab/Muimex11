@@ -2667,7 +2667,8 @@
                 android:layout_width="0dp"
                 android:layout_height="52dp"
                 android:layout_weight="1.35"
-                android:backgroundTint="#2E9E5B"
+                android:backgroundTint="@null"
+                android:background="@drawable/bg_btn_launch"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 android:maxLines="1"
@@ -2710,7 +2711,8 @@
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:layout_marginStart="6dp"
-                android:backgroundTint="#26E53935"
+                android:backgroundTint="@null"
+                android:background="@drawable/bg_btn_reset"
                 android:contentDescription="@string/cd_reset_all"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
@@ -2721,7 +2723,7 @@
                 app:iconGravity="textStart"
                 app:iconPadding="0dp"
                 app:iconSize="24dp"
-                app:iconTint="#E53935" />
+                app:iconTint="#FF6E76" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

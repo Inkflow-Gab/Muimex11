@@ -1,0 +1,11 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- On Android 12+, the system splash screen must match the ink background too. -->
+    <style name="Theme.Muimex11.Splash" parent="Base.Theme.Muimex11">
+        <item name="android:windowBackground">@color/splashBg</item>
+        <item name="android:statusBarColor">@color/splashBg</item>
+        <item name="android:navigationBarColor">@color/splashBg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground">@color/splashBg</item>
+        <item name="android:windowSplashScreenAnimationDuration">400</item>
+    </style>
+</resources>

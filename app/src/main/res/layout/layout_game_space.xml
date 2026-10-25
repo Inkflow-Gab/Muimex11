@@ -14,4 +14,16 @@
         android:contentDescription="@string/btn_gamespace"
         android:scaleType="fitCenter"
         android:src="@drawable/gamespace_ring" />
+
+    <TextView
+        android:id="@+id/gsBubbleFps"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:shadowColor="#8C000000"
+        android:shadowDy="1"
+        android:shadowRadius="4"
+        android:textColor="#FFFFFF"
+        android:textSize="10.5sp"
+        android:textStyle="bold" />
 </FrameLayout>

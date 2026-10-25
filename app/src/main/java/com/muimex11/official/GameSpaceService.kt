@@ -72,6 +72,7 @@ class GameSpaceService : Service() {
     private lateinit var appIconView: ImageView
     private lateinit var appNameView: TextView
     private lateinit var fpsChip: TextView
+    private lateinit var bubbleFps: TextView
     private lateinit var scroll: ScrollView
 
     private var thermalBypass = false
@@ -108,6 +109,7 @@ class GameSpaceService : Service() {
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         try {
             buildBubble()
+            startFpsPolling()
         } catch (e: Exception) {
             toast(getString(R.string.svc_failed, e.message ?: ""))
             stopSelf()
@@ -128,6 +130,7 @@ class GameSpaceService : Service() {
         bubbleRoot = LayoutInflater.from(uiContext()).inflate(R.layout.layout_game_space, null)
         AppTranslator.translateTree(bubbleRoot!!)
         bubble = bubbleRoot!!.findViewById(R.id.gsBubble)
+        bubbleFps = bubbleRoot!!.findViewById(R.id.gsBubbleFps)
 
         val flags = overlayFlags or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         bubbleParams = WindowManager.LayoutParams(
@@ -249,7 +252,6 @@ class GameSpaceService : Service() {
     }
 
     private fun collapse() {
-        stopFpsPolling()
         try {
             if (isExpanded()) wm.removeView(panelRoot)
         } catch (_: Exception) {}
@@ -715,43 +717,75 @@ class GameSpaceService : Service() {
         }
     }
 
+    /**
+     * Always-on FPS sampling.
+     *
+     *  - Bubble shows ONLY the FPS number, hidden while no game is detected.
+     *  - Counters reset whenever the foreground app changes, so switching
+     *    apps cannot produce absurd numbers from a stale frame delta.
+     *  - Only sane deltas are displayed; everything else is resynced.
+     */
     private var fpsPolling = false
 
     private fun startFpsPolling() {
-        stopFpsPolling()
+        if (fpsPolling) return
         fpsPolling = true
         ioScope.launch {
+            var lastPkg: String? = null
             var lastCount = -1L
             var lastAt = 0L
             while (fpsPolling) {
                 try {
                     val pkg = detectForegroundPkg()
+                    if (pkg != lastPkg) {
+                        lastPkg = pkg
+                        lastCount = -1L
+                        lastAt = 0L
+                    }
                     if (pkg != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         val out = query("dumpsys gfxinfo $pkg")
                         val total = Regex("Total frames rendered:\\s*(\\d+)").find(out)
                             ?.groupValues?.getOrNull(1)?.toLongOrNull()
                         val now = android.os.SystemClock.elapsedRealtime()
-                        if (total != null && lastCount >= 0 && now - lastAt > 400) {
-                            val fps = ((total - lastCount) * 1000f) / (now - lastAt)
-                            val shown = fps.toInt().coerceIn(0, 999)
-                            handler.post {
-                                if (fpsPolling) {
-                                    fpsChip.text = "$shown FPS"
-                                    fpsChip.setTextColor(
-                                        when {
-                                            shown >= 50 -> COLOR_ON
-                                            shown >= 30 -> Color.parseColor("#FFB300")
-                                            else -> Color.parseColor("#FF5A6E")
-                                        }
-                                    )
-                                }
+                        if (total != null) {
+                            val dt = now - lastAt
+                            val frames = total - lastCount
+                            val sane = lastCount >= 0 && dt >= 700 && frames in 1..1500
+                            if (sane) {
+                                publishFps(((frames * 1000f) / dt).coerceIn(0f, 360f).toInt())
                             }
+                            lastCount = total
+                            lastAt = now
+                        } else {
+                            publishFps(null)
                         }
-                        if (total != null) lastCount = total
-                        lastAt = now
+                    } else {
+                        publishFps(null)
                     }
                 } catch (_: Exception) {}
                 kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    private fun publishFps(value: Int?) {
+        handler.post {
+            if (!fpsPolling) return@post
+            if (::bubbleFps.isInitialized) bubbleFps.text = value?.toString() ?: ""
+            if (::fpsChip.isInitialized) {
+                if (value != null) {
+                    fpsChip.text = "$value FPS"
+                    fpsChip.setTextColor(
+                        when {
+                            value >= 50 -> COLOR_ON
+                            value >= 30 -> Color.parseColor("#FFB300")
+                            else -> Color.parseColor("#FF5A6E")
+                        }
+                    )
+                } else {
+                    fpsChip.text = getString(R.string.gs_fps_measuring)
+                    fpsChip.setTextColor(COLOR_OFF)
+                }
             }
         }
     }
